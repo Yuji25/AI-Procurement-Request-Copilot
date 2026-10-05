@@ -50,3 +50,40 @@ class LLMProvider(Protocol):
     def complete(self, request: ModelRequest) -> ModelResponse:
         """Return one model turn; transport errors are adapter responsibilities."""
         ...
+
+
+class ProviderError(Exception):
+    """Sanitized transport failure; attempts counts actual HTTP attempts."""
+
+    def __init__(self, message: str, *, attempts: int = 0, status_code: int | None = None):
+        super().__init__(message)
+        self.attempts = attempts
+        self.status_code = status_code
+
+
+class ProviderConfigurationError(ProviderError):
+    pass
+
+
+class ProviderRequestError(ProviderError):
+    pass
+
+
+class ProviderTimeoutError(ProviderError):
+    pass
+
+
+class ProviderRateLimitError(ProviderError):
+    pass
+
+
+class ProviderAuthenticationError(ProviderError):
+    pass
+
+
+class ProviderResponseError(ProviderError):
+    pass
+
+
+class ProviderUpstreamError(ProviderError):
+    pass

@@ -88,6 +88,36 @@ The starter pack does **not** force a particular LLM provider or agent framework
 
 `.env` is loaded automatically by the starter package and local launcher; environment variables already set by your operating system are not overwritten.
 
+The compatible HTTP transport uses `LLM_PROVIDER` (`openai-compatible`, `openai`,
+or `groq`), `LLM_API_KEY`, `LLM_BASE_URL`, `LLM_MODEL`, and the timeout, retry,
+temperature, and output-token settings in `.env.example`. Set the base URL to
+the API root (for example, `https://api.groq.com/openai/v1`), without appending
+`/chat/completions`. No provider SDK is required for this transport.
+
+**Optional manual live provider smoke test:**
+
+```powershell
+.\.venv\Scripts\python.exe -m src.provider_smoke
+```
+
+This sends “Reply with the word OK.” to the configured model with at most 256
+output tokens and retries disabled (one HTTP attempt). It is never part of test
+discovery, uses no procurement data, and prints only pass/fail. It requires
+network access and may incur a small provider charge.
+Reasoning models consume output tokens before returning text; even this small
+cap can be insufficient. Empty/truncated responses fail explicitly and are not
+automatically retried with a larger budget.
+
+The transport supports non-streaming text and function-tool calls. Retry settings
+count additional attempts; timeouts, connection failures, HTTP 408/429 and
+500/502/503/504 can retry with bounded backoff. Authentication, malformed
+responses, and other HTTP failures are not retried. `Retry-After` is respected;
+values above 30 seconds stop the run rather than retry early. Requests timeout
+applies to connection/read inactivity per attempt, not a total run deadline.
+Optional JSON-schema output requires support from the configured model; failures
+are surfaced rather than silently downgrading the request. Protocol details:
+[Groq compatible Chat Completions reference](https://console.groq.com/docs/api-reference).
+
 ### 4. Start the local services
 
 ```bash
