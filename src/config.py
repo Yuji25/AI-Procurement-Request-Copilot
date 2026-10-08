@@ -31,8 +31,8 @@ class RuntimeConfig:
     llm_max_retries: int = 2
     llm_temperature: float = 0.0
     llm_max_output_tokens: int = 1024
+    llm_reasoning_effort: str | None = None
     vendor_risk_api_url: str = "http://127.0.0.1:8001"
-    agent_max_model_turns: int = 4
     agent_max_tool_calls: int = 24
 
     def __post_init__(self) -> None:
@@ -49,8 +49,10 @@ class RuntimeConfig:
         if self.llm_base_url:
             _url(self.llm_base_url, "LLM_BASE_URL")
         _url(self.vendor_risk_api_url, "VENDOR_RISK_API_URL")
-        if type(self.agent_max_model_turns) is not int or not 1 <= self.agent_max_model_turns <= 8:
-            raise ValueError("AGENT_MAX_MODEL_TURNS must be an integer between 1 and 8")
+        if self.llm_reasoning_effort is not None and self.llm_reasoning_effort not in {
+            "none", "minimal", "low", "medium", "high", "xhigh", "default"
+        }:
+            raise ValueError("LLM_REASONING_EFFORT has an unsupported value")
         if type(self.agent_max_tool_calls) is not int or not 6 <= self.agent_max_tool_calls <= 40:
             raise ValueError("AGENT_MAX_TOOL_CALLS must be an integer between 6 and 40")
 
@@ -93,7 +95,7 @@ def load_runtime_config(environ: Mapping[str, str] | None = None) -> RuntimeConf
         llm_max_retries=number("LLM_MAX_RETRIES", "2", int),
         llm_temperature=number("LLM_TEMPERATURE", "0", float),
         llm_max_output_tokens=number("LLM_MAX_OUTPUT_TOKENS", "1024", int),
+        llm_reasoning_effort=text("LLM_REASONING_EFFORT", "low") or None,
         vendor_risk_api_url=load_vendor_risk_api_url(env),
-        agent_max_model_turns=number("AGENT_MAX_MODEL_TURNS", "4", int),
         agent_max_tool_calls=number("AGENT_MAX_TOOL_CALLS", "24", int),
     )

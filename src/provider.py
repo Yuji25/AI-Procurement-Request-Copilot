@@ -36,6 +36,8 @@ class ModelRequest:
     messages: tuple[ModelMessage, ...]
     tools: tuple[ToolDefinition, ...] = ()
     output_schema: dict[str, Any] | None = None
+    max_output_tokens: int | None = None
+    max_retries: int | None = None
 
 
 @dataclass(frozen=True)

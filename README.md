@@ -174,30 +174,42 @@ Start with a thin vertical slice. Get Architecture A working before building Arc
 
 ### Architecture A behavior
 
-`handle_request(request_id, "single")` starts with request/requester context.
-The model may call six request-scoped tools: context, budget, catalog/history,
-internal vendor, external vendor-risk API, and deterministic policy evaluation.
-Arguments are validated and cannot substitute another request's facts. Every
-result carries status and provenance; CSV missing values become explicit nulls.
-Risk data is retrieved through the supplied HTTP client, never its backing JSON.
+`handle_request(request_id, "single")` gathers six request-scoped read-only tools
+exactly once in code: request/requester context, department budget,
+software catalog/purchase history, internal vendor registry, external vendor-risk
+API, and deterministic policy evaluation. Each result retains status and provenance;
+CSV missing values become explicit nulls. Risk data comes through the supplied
+HTTP client, never its backing JSON.
 
-Defaults are four model turns and 24 tool invocations, configurable through
-`AGENT_MAX_MODEL_TURNS` (hard cap 8) and `AGENT_MAX_TOOL_CALLS` (hard cap 40,
-minimum 6). Tool budget is reserved for mandatory evidence. The final model turn
-receives complete evidence with tool definitions disabled. Provider HTTP retries
-count in `telemetry.llm_calls`; `tool_calls` counts recognized, validated tool
-invocations, including cached replies and deterministic prerequisite calls.
-Rejected tool requests do not count as executed tools.
+Missing required facts produce clarification without a model call. Unknown,
+conflicting, or unavailable material evidence produces a deterministic human
+handoff without a model call. Otherwise, the agent sends a typed, compact
+`EvidencePack` for one recommendation classification. Full records, provenance,
+policy Markdown and policy check descriptions stay on the host. Static system
+instructions precede the dynamic evidence; there is no growing conversation,
+model-selected tool dispatch, or second model turn.
 
-Finalization gathers mandatory evidence even if the model omits it, validates
-the model's controlled recommendation label, and constructs factual evidence,
-approvals, risks and human handoff from code. Business text is untrusted; a
-heuristic injection flag is supplemental to these enforceable controls.
-Missing facts require clarification; conflicting/unavailable evidence, provider
-failures, invalid output and exhausted limits require manual review. Rules are
-implemented in code against policy version 2026.09/reference date 2026-09-30;
-Markdown thresholds are not parsed at runtime. Overlap is a candidate review,
-not automatic rejection, and licensed seats are not assumed unused.
+The classification call caps output at 256 tokens (or the smaller configured
+limit) and disables retries, enforcing at most one HTTP attempt. General provider
+requests retain their configured limits/retries and the manual smoke test remains
+separate. `LLM_REASONING_EFFORT` defaults to `low`; set it blank for endpoints
+that do not support the optional compatible-provider parameter.
+`AGENT_MAX_MODEL_TURNS` is obsolete and ignored. `AGENT_MAX_TOOL_CALLS` remains
+an evidence-execution ceiling (minimum 6, hard cap 40), with six calls normally.
+
+Code validates the model's small controlled label and builds `ProcurementDecision`
+from factual evidence and deterministic controls. The model cannot remove
+approvals or risk flags. Business text is untrusted; the injection heuristic is
+supplemental to these enforceable controls. Provider failures, truncated/invalid
+output and unexpected tool calls require manual review without another attempt.
+Rules use policy version 2026.09/reference date 2026-09-30; Markdown thresholds
+are not parsed at runtime. Overlap is a candidate review, not automatic rejection,
+and licensed seats are not assumed unused. Architecture B remains unimplemented.
+
+`telemetry.llm_calls` counts actual HTTP attempts; `logical_llm_calls` counts
+classification invocations. Tool telemetry counts executed tools and names.
+Optional prompt/completion/cached-token diagnostics use provider-reported usage;
+unreported usage is null, while a zero-call handoff reports zero tokens.
 
 Run offline tests with `python -m unittest discover -s tests -v`. Public evaluation
 requires both the configured model provider and a running vendor-risk API; start

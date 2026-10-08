@@ -66,13 +66,20 @@ class RuntimeConfigTests(unittest.TestCase):
     def test_vendor_settings_are_independent_of_llm_settings(self):
         self.assertEqual(load_vendor_risk_api_url({"LLM_TIMEOUT_SECONDS": "broken"}), "http://127.0.0.1:8001")
 
-    def test_agent_limits_are_configurable_with_hard_caps(self):
-        config = load_runtime_config({"AGENT_MAX_MODEL_TURNS": "2", "AGENT_MAX_TOOL_CALLS": "6"})
-        self.assertEqual((config.agent_max_model_turns, config.agent_max_tool_calls), (2, 6))
-        for name, values in (("AGENT_MAX_MODEL_TURNS", ("0", "9")), ("AGENT_MAX_TOOL_CALLS", ("5", "41"))):
-            for value in values:
-                with self.assertRaisesRegex(ValueError, name):
-                    load_runtime_config({name: value})
+    def test_tool_limits_remain_configurable_and_old_model_turn_setting_is_retired(self):
+        config = load_runtime_config({"AGENT_MAX_MODEL_TURNS": "8", "AGENT_MAX_TOOL_CALLS": "6"})
+        self.assertEqual(config.agent_max_tool_calls, 6)
+        self.assertFalse(hasattr(config, "agent_max_model_turns"))
+        for value in ("5", "41"):
+            with self.assertRaisesRegex(ValueError, "AGENT_MAX_TOOL_CALLS"):
+                load_runtime_config({"AGENT_MAX_TOOL_CALLS": value})
+
+    def test_optional_reasoning_effort(self):
+        self.assertEqual(load_runtime_config({}).llm_reasoning_effort, "low")
+        self.assertIsNone(load_runtime_config({"LLM_REASONING_EFFORT": ""}).llm_reasoning_effort)
+        self.assertEqual(load_runtime_config({"LLM_REASONING_EFFORT": "high"}).llm_reasoning_effort, "high")
+        with self.assertRaisesRegex(ValueError, "LLM_REASONING_EFFORT"):
+            load_runtime_config({"LLM_REASONING_EFFORT": "unsupported"})
 
     def test_os_environment_and_explicit_mapping(self):
         with patch.dict("os.environ", {"LLM_MODEL": "from-os"}, clear=True):

@@ -76,6 +76,49 @@ class TransportTests(unittest.TestCase):
         self.assertEqual(result.tool_calls, (ToolCall("call-1", "lookup", {"department": "Finance"}),))
         self.assertIsNone(result.content)
 
+    def test_optional_reasoning_effort(self):
+        self.provider.complete(REQUEST)
+        self.assertNotIn("reasoning_effort", self.session.post.call_args.kwargs["json"])
+        provider = OpenAICompatibleProvider(replace(CONFIG, llm_reasoning_effort="low"), session=self.session)
+        provider.complete(REQUEST)
+        self.assertEqual(self.session.post.call_args.kwargs["json"]["reasoning_effort"], "low")
+
+    def test_request_output_limit_preserves_global_default_and_ceiling(self):
+        provider = OpenAICompatibleProvider(replace(CONFIG, llm_max_output_tokens=1024), session=self.session)
+        provider.complete(ModelRequest(REQUEST.messages, max_output_tokens=256))
+        self.assertEqual(self.session.post.call_args.kwargs["json"]["max_tokens"], 256)
+        provider.complete(REQUEST)
+        self.assertEqual(self.session.post.call_args.kwargs["json"]["max_tokens"], 1024)
+        self.provider.complete(ModelRequest(REQUEST.messages, max_output_tokens=256))
+        self.assertEqual(self.session.post.call_args.kwargs["json"]["max_tokens"], 99)
+
+    def test_request_retry_limit_zero_stops_rate_limit_after_one_attempt(self):
+        provider = OpenAICompatibleProvider(replace(CONFIG, llm_max_retries=2), session=self.session)
+        self.session.post.return_value = response(status=429)
+        with self.assertRaises(ProviderRateLimitError) as caught:
+            provider.complete(ModelRequest(REQUEST.messages, max_retries=0))
+        self.assertEqual(caught.exception.attempts, 1)
+        self.session.post.assert_called_once()
+        self.sleep.assert_not_called()
+
+    def test_invalid_request_overrides_fail_before_http(self):
+        for kwargs in ({"max_output_tokens": 0}, {"max_output_tokens": True},
+                       {"max_retries": -1}, {"max_retries": True}):
+            with self.subTest(kwargs=kwargs), self.assertRaises(ProviderRequestError):
+                self.provider.complete(ModelRequest(REQUEST.messages, **kwargs))
+        self.session.post.assert_not_called()
+
+    def test_cached_token_usage(self):
+        body = payload()
+        body["usage"]["prompt_tokens_details"] = {"cached_tokens": 2}
+        self.session.post.return_value = response(body=body)
+        self.assertEqual(self.provider.complete(REQUEST).usage["cached_tokens"], 2)
+        for details in ([], {"cached_tokens": -1}, {"cached_tokens": True}):
+            body["usage"]["prompt_tokens_details"] = details
+            self.session.post.return_value = response(body=body)
+            with self.subTest(details=details), self.assertRaises(ProviderResponseError):
+                self.provider.complete(REQUEST)
+
     def test_multiple_tool_calls(self):
         self.session.post.return_value = response(body=payload("Checking", [call(), call("call-2", "vendor", '{"name":"Vendor"}')], "tool_calls"))
         result = self.provider.complete(REQUEST)

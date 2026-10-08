@@ -94,6 +94,14 @@ class OpenAICompatibleProvider:
                 "temperature": self._config.llm_temperature,
                 "max_tokens": self._config.llm_max_output_tokens, "stream": False,
             }
+            if request.max_output_tokens is not None:
+                if type(request.max_output_tokens) is not int or request.max_output_tokens <= 0:
+                    raise ValueError("Invalid request output limit")
+                body["max_tokens"] = min(request.max_output_tokens, self._config.llm_max_output_tokens)
+            if request.max_retries is not None and (type(request.max_retries) is not int or request.max_retries < 0):
+                raise ValueError("Invalid request retry limit")
+            if self._config.llm_reasoning_effort is not None:
+                body["reasoning_effort"] = self._config.llm_reasoning_effort
             if request.tools:
                 tools = []
                 for tool in request.tools:
@@ -168,6 +176,15 @@ class OpenAICompatibleProvider:
                     if type(count) is not int or count < 0:
                         raise ValueError("Invalid usage count")
                     usage[name] = count
+            details = (raw_usage or {}).get("prompt_tokens_details")
+            if details is not None:
+                if not isinstance(details, dict):
+                    raise ValueError("Invalid prompt usage details")
+                if "cached_tokens" in details:
+                    cached = details["cached_tokens"]
+                    if type(cached) is not int or cached < 0:
+                        raise ValueError("Invalid cached token count")
+                    usage["cached_tokens"] = cached
             return ModelResponse(content, tuple(calls), finish, usage, attempts=attempt)
         except (ValueError, TypeError, KeyError):
             raise ProviderResponseError("Malformed provider response.", attempts=attempt) from None
@@ -189,7 +206,10 @@ class OpenAICompatibleProvider:
 
     def complete(self, request: ModelRequest) -> ModelResponse:
         body = self._payload(request)
-        for attempt in range(1, self._config.llm_max_retries + 2):
+        max_retries = self._config.llm_max_retries
+        if request.max_retries is not None:
+            max_retries = min(max_retries, request.max_retries)
+        for attempt in range(1, max_retries + 2):
             retry_after = None
             retryable = False
             try:
@@ -223,7 +243,7 @@ class OpenAICompatibleProvider:
                 finally:
                     response.close()
             delay = self._retry_delay(attempt, retry_after) if retryable else None
-            if not retryable or attempt > self._config.llm_max_retries or delay is None:
+            if not retryable or attempt > max_retries or delay is None:
                 raise error from None
             time.sleep(delay)
         raise ProviderError("Provider request did not complete.")  # Defensive; loop always returns/raises.

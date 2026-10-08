@@ -183,7 +183,5 @@ class EvidenceTools:
         facts = asdict(result)
         facts["unknown_checks"] = result.unknown_checks
         facts["checks"] = [{**asdict(c), "reference": c.reference} for c in result.checks]
-        # The agent can inspect prerequisite facts without repeating retrieval.
-        facts["supporting_evidence"] = [r.model_dump() for r in self.results.values()]
         return ToolResult(name="policy_evaluation", status="unknown" if result.unknown_checks else "ok",
                           data=facts, references=list(dict.fromkeys(c.reference for c in result.checks)))

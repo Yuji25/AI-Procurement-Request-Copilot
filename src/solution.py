@@ -22,5 +22,4 @@ def handle_request(request_id: str, architecture: Architecture = "single") -> Pr
     except ValueError:
         # run_single surfaces provider configuration failure as manual review.
         return run_single(request_id)
-    return run_single(request_id, max_model_turns=config.agent_max_model_turns,
-                      max_tool_calls=config.agent_max_tool_calls)
+    return run_single(request_id, max_tool_calls=config.agent_max_tool_calls)

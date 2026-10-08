@@ -31,6 +31,7 @@ class EvidenceToolTests(unittest.TestCase):
         self.assertEqual(self.tools.results["department_budget"].data["budget"]["available_usd"], 29000)
         self.assertIn("Manager", self.tools.results["policy_evaluation"].data["required_approvals"])
         self.risk.assert_called_once_with("SignFlow")
+        self.assertNotIn("supporting_evidence", self.tools.results["policy_evaluation"].data)
 
     def test_unknown_tool_and_arguments_never_execute(self):
         for name, args in (("purchase", {"request_id": "REQ-1001"}),
