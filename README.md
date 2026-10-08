@@ -204,12 +204,79 @@ supplemental to these enforceable controls. Provider failures, truncated/invalid
 output and unexpected tool calls require manual review without another attempt.
 Rules use policy version 2026.09/reference date 2026-09-30; Markdown thresholds
 are not parsed at runtime. Overlap is a candidate review, not automatic rejection,
-and licensed seats are not assumed unused. Architecture B remains unimplemented.
+and licensed seats are not assumed unused.
 
 `telemetry.llm_calls` counts actual HTTP attempts; `logical_llm_calls` counts
 classification invocations. Tool telemetry counts executed tools and names.
 Optional prompt/completion/cached-token diagnostics use provider-reported usage;
 unreported usage is null, while a zero-call handoff reports zero tokens.
+
+### Architecture B: staged semantic review
+
+`handle_request(request_id, "staged")` uses the same six tools, `EvidencePack`,
+deterministic policy and finalizer as Architecture A. Required information missing
+or material evidence unknown/unavailable/conflicting causes a zero-model-call
+handoff. Each evidence source is fetched once; specialists never retrieve it again.
+
+For complete evidence, Stage 1 (Evidence/Risk Analyst) returns two strict enums:
+existing-software fit and support for the stated gap. Code maps this to a proposed
+recommendation. Stage 2 (independent Decision Reviewer) receives the compact facts
+and that tiny typed handoff in a fresh request. It challenges category-only matches,
+assumed spare seats and unsupported gap claims, and returns a recommendation,
+review outcome and issue classification. It can correct Stage 1 or escalate to a
+human; inconsistent review classifications are rejected. These are two specialist
+roles using the configured provider/model, not independent evidence sources.
+
+Both stages use static-first instructions, a per-call 256-token output ceiling
+(bounded by `LLM_MAX_OUTPUT_TOKENS`), configured low reasoning effort, and zero
+HTTP retries. There are no agent loops, repair calls, tool schemas, policy Markdown
+or prior conversations in either prompt. A failed first stage skips the second;
+a failure in either stage falls back to deterministic manual review. Code retains
+all mandatory approvals, risk flags, missing information and provenance.
+Architecture A remains one classifier; Architecture B adds specialist analysis
+and an independent challenge, with a maximum of two logical/HTTP calls.
+
+`AGENT_MAX_TOOL_CALLS=24` remains supported for both paths (minimum 6, maximum 40);
+normal runs execute six tools. The retired `AGENT_MAX_MODEL_TURNS` is not used.
+Telemetry totals actual HTTP attempts, logical calls and tool calls/names across
+both stages. Token diagnostics sum reported usage; if any attempted stage lacks
+a metric, its total is null rather than a misleading partial total. Failure flags
+identify the analyst or reviewer stage. No staged live evaluation has been run
+as part of this implementation; its quality and latency require live validation.
+
+### Architecture A optimization evidence
+
+The original model-led tool loop repeatedly sent evidence and policy text while
+spending model turns on retrieval choices that the procurement workflow always
+requires. Repeated calls created TPM/rate-limit pressure. Evidence-first host
+orchestration removed that work and made required evidence acquisition independent
+of model behavior. Deterministic early exits also avoid model reasoning when code
+already establishes clarification or manual review, improving reliability as well
+as reducing cost.
+
+The following Architecture A results were supplied from the completed live
+validation before the Architecture B implementation; they are historical results,
+not new measurements from the offline staged tests:
+
+| Metric | Original Architecture A | Optimized Architecture A |
+| --- | --- | --- |
+| Average actual LLM HTTP attempts/request | 7.17 | 0.33 (2 total calls across 6 cases) |
+| Average public-evaluation latency | ~46.85 seconds | ~0.80 seconds |
+| Public cases passed | — | 6/6 |
+| Tool calls/request | — | 6 |
+| Rate-limit behavior | Repeated TPM/rate-limit pressure | No 429s; full run far below 8K TPM |
+
+The representative optimized live call used 424 input + 60 output = 484 total
+tokens. Reported reductions were roughly 95% in model calls and 98% in average
+latency. These six cases are assessment evidence, not a production benchmark.
+
+Free-tier-conscious choices shared by both architectures are once-only evidence,
+small typed outputs, low reasoning effort, no classification retries, compact
+policy outcomes and zero-call deterministic handoffs. Staged semantic cases cost
+up to two compact calls, so Architecture B's extra review should be assessed
+against its additional token/latency cost. Global provider ceilings and the manual
+smoke path remain unchanged. Stable prompt prefixes permit provider caching where
+supported; actual cache hits are not guaranteed.
 
 Run offline tests with `python -m unittest discover -s tests -v`. Public evaluation
 requires both the configured model provider and a running vendor-risk API; start

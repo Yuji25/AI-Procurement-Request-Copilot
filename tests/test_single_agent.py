@@ -226,13 +226,13 @@ class SingleAgentTests(unittest.TestCase):
         self.assertEqual(result.telemetry.llm_calls, 1)
         self.assertIn("provider_rate_limit", result.risk_flags)
 
-    def test_unknown_request_and_staged_architecture(self):
+    def test_unknown_request_and_invalid_architecture(self):
         provider = FakeProvider()
         result = run_single("missing", provider=provider)
         self.assertIn("request_unavailable", result.risk_flags)
         self.assertEqual(provider.requests, [])
-        with self.assertRaises(NotImplementedError):
-            handle_request("REQ-1001", "staged")
+        with self.assertRaises(ValueError):
+            handle_request("REQ-1001", "invalid")
 
     def test_adapter_keeps_harness_signature(self):
         with patch("src.single_agent.OpenAICompatibleProvider", return_value=FakeProvider()) as factory:
