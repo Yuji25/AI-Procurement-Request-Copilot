@@ -79,6 +79,65 @@ class EvidenceToolTests(unittest.TestCase):
         self.assertEqual({r["product_name"] for r in matches}, {"PixelCraft Pro", "CreativeSuite"})
         self.assertTrue(all("unused_seats" not in r for r in matches))
 
+    def test_vendor_only_different_category_is_context_not_overlap(self):
+        from src import data_access
+        request = dict(data_access.get_request("REQ-1001"))
+        request.update(product_name="SignFlow Training Pack", category="Professional Services")
+        with patch("src.tools.data.get_request", return_value=request):
+            result = self.tools.ensure("software_overlap")
+        self.assertEqual(result.data["catalog_matches"], [])
+        # History retains the same vendor/department retrieval predicate.
+        history = data_access.load_purchase_history().to_dict(orient="records")
+        expected = [r["purchase_id"] for r in history if r["vendor_name"] == "SignFlow" or r["department"] == "Finance"]
+        self.assertEqual([r["purchase_id"] for r in result.data["purchase_history"]], expected)
+        self.assertTrue(any(r["vendor_name"] == "SignFlow" for r in result.data["purchase_history"]))
+
+    def test_product_or_category_alone_establishes_overlap(self):
+        from src import data_access
+        base = dict(data_access.get_request("REQ-1001"))
+        for changes, reason in (({"product_name": " signflow ", "category": "Professional Services", "vendor_name": "Other"}, "product_name"),
+                                ({"product_name": "Other", "category": " e-SIGNATURE ", "vendor_name": "Other"}, "category")):
+            with self.subTest(reason=reason), patch("src.tools.data.get_request", return_value={**base, **changes}):
+                tools = EvidenceTools("REQ-1001", RunTelemetryCounter())
+                matches = tools.ensure("software_overlap").data["catalog_matches"]
+            self.assertEqual([r["product_name"] for r in matches], ["SignFlow"])
+            self.assertEqual(matches[0]["match_fields"], [reason])
+
+    def test_existing_public_and_named_overlap_candidates_preserved(self):
+        expected = {
+            "REQ-1001": {"SignFlow"},
+            "REQ-1002": {"PixelCraft Pro", "CreativeSuite"},
+            "REQ-1003": {"CodeMate"},
+            "REQ-1004": {"NeuralDesk Business"},
+            "REQ-1005": set(),
+            "REQ-1006": {"NeuralDesk Business"},
+            "REQ-1008": {"TaskFlow"},
+            "REQ-1009": set(),
+        }
+        for request_id, products in expected.items():
+            with self.subTest(request_id=request_id):
+                tools = EvidenceTools(request_id, RunTelemetryCounter())
+                matches = tools.ensure("software_overlap").data["catalog_matches"]
+                self.assertEqual({r["product_name"] for r in matches}, products)
+
+    def test_training_pack_cannot_trigger_overlap_recommendation_in_either_path(self):
+        from src.single_agent import run_single
+        from src.staged_agent import run_staged
+        from src.provider import ModelResponse
+        from tests.test_single_agent import FakeProvider
+        from tests.test_staged_agent import SequenceProvider, analyst, reviewer
+
+        single = FakeProvider(ModelResponse(content='{"recommendation":"consider_existing"}'))
+        staged = SequenceProvider(analyst(), reviewer(recommendation="consider_existing", review="corrected", issue="gap_unsubstantiated"))
+        for runner, provider in ((run_single, single), (run_staged, staged)):
+            with self.subTest(architecture=runner.__name__):
+                decision = runner("REQ-1010", provider=provider)
+                self.assertNotIn("existing_tool_overlap", decision.risk_flags)
+                self.assertNotIn("Review existing software", decision.recommendation)
+                self.assertEqual(decision.required_approvals, ["Manager"])
+                self.assertEqual(decision.telemetry.tool_calls, 6)
+                self.assertTrue(decision.human_review_required)
+
     def test_tool_limit_reserves_mandatory_evidence(self):
         tools = EvidenceTools("REQ-1001", RunTelemetryCounter(), max_calls=6)
         tools.ensure("request_context")

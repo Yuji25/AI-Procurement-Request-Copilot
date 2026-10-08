@@ -135,7 +135,10 @@ class EvidenceTools:
                 continue
             reasons = [field for field in ("product_name", "vendor_name", "category")
                        if _normal(request.get(field)) and _normal(request.get(field)) == _normal(record.get(field))]
-            if reasons:
+            # Vendor identity is context, not evidence of functional overlap.
+            # Keep it as a supporting match field only after product/category
+            # establishes a catalog candidate; history retrieval is independent.
+            if "product_name" in reasons or "category" in reasons:
                 catalog.append({**record, "match_fields": reasons})
         history = [r for r in _records(data.load_purchase_history()) if
                    _normal(r.get("vendor_name")) == _normal(request.get("vendor_name")) or
