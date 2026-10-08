@@ -42,3 +42,12 @@ Use the same case set for both architectures. Your final evaluation should inclu
 | Policy failures found manually |  |  |
 
 The public runner can measure latency. LLM/tool counts must come from your own telemetry or the optional telemetry field in the output contract.
+
+## Submission artifacts
+
+The latest comparison and MVP decision are recorded in `README.md` and
+`docs/architecture_decision.md`. Both generated `results_single.csv` and
+`results_staged.csv` remain ignored/local under the existing repository convention.
+Keep them locally for verification; regenerating them consumes provider quota.
+These instructions and the submission checklist require comparison evidence,
+but do not require committing the generated CSVs.
