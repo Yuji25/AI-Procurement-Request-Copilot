@@ -22,7 +22,7 @@ Use the same public evaluation cases for both and defend which architecture you 
 .
 ├── data/                   # Synthetic business data + procurement policy
 ├── mock_api/               # Vendor-risk service used as an external tool
-├── src/                    # Contracts + low-level helpers; NO agent solution
+├── src/                    # Contracts, policy, tools, provider, single-agent solution
 ├── evals/                  # Six public evaluation cases + runner
 ├── templates/              # Evaluation and decision-memo templates
 ├── docs/                   # Student assignment brief
@@ -32,7 +32,9 @@ Use the same public evaluation cases for both and defend which architecture you 
 └── verify_setup.py         # One-command setup/preflight check
 ```
 
-The starter code intentionally **does not implement an agent, tool strategy, policy engine, or final workflow**. Those choices are part of the assessment.
+Architecture A is implemented as one bounded agent with read-only tools and
+authoritative deterministic checks. Architecture B (`staged`) remains explicitly
+unimplemented. The Streamlit interface remains the original scaffold.
 
 ## Prerequisites
 
@@ -169,6 +171,39 @@ Request -> Understand -> Gather evidence -> Deterministic checks
 ```
 
 Start with a thin vertical slice. Get Architecture A working before building Architecture B.
+
+### Architecture A behavior
+
+`handle_request(request_id, "single")` starts with request/requester context.
+The model may call six request-scoped tools: context, budget, catalog/history,
+internal vendor, external vendor-risk API, and deterministic policy evaluation.
+Arguments are validated and cannot substitute another request's facts. Every
+result carries status and provenance; CSV missing values become explicit nulls.
+Risk data is retrieved through the supplied HTTP client, never its backing JSON.
+
+Defaults are four model turns and 24 tool invocations, configurable through
+`AGENT_MAX_MODEL_TURNS` (hard cap 8) and `AGENT_MAX_TOOL_CALLS` (hard cap 40,
+minimum 6). Tool budget is reserved for mandatory evidence. The final model turn
+receives complete evidence with tool definitions disabled. Provider HTTP retries
+count in `telemetry.llm_calls`; `tool_calls` counts recognized, validated tool
+invocations, including cached replies and deterministic prerequisite calls.
+Rejected tool requests do not count as executed tools.
+
+Finalization gathers mandatory evidence even if the model omits it, validates
+the model's controlled recommendation label, and constructs factual evidence,
+approvals, risks and human handoff from code. Business text is untrusted; a
+heuristic injection flag is supplemental to these enforceable controls.
+Missing facts require clarification; conflicting/unavailable evidence, provider
+failures, invalid output and exhausted limits require manual review. Rules are
+implemented in code against policy version 2026.09/reference date 2026-09-30;
+Markdown thresholds are not parsed at runtime. Overlap is a candidate review,
+not automatic rejection, and licensed seats are not assumed unused.
+
+Run offline tests with `python -m unittest discover -s tests -v`. Public evaluation
+requires both the configured model provider and a running vendor-risk API; start
+the supplied local services first. Generated `evals/results_single.csv` is ignored
+by Git. Passing public minimum checks alone does not establish recommendation
+quality or production readiness.
 
 ## Useful files
 

@@ -66,6 +66,14 @@ class RuntimeConfigTests(unittest.TestCase):
     def test_vendor_settings_are_independent_of_llm_settings(self):
         self.assertEqual(load_vendor_risk_api_url({"LLM_TIMEOUT_SECONDS": "broken"}), "http://127.0.0.1:8001")
 
+    def test_agent_limits_are_configurable_with_hard_caps(self):
+        config = load_runtime_config({"AGENT_MAX_MODEL_TURNS": "2", "AGENT_MAX_TOOL_CALLS": "6"})
+        self.assertEqual((config.agent_max_model_turns, config.agent_max_tool_calls), (2, 6))
+        for name, values in (("AGENT_MAX_MODEL_TURNS", ("0", "9")), ("AGENT_MAX_TOOL_CALLS", ("5", "41"))):
+            for value in values:
+                with self.assertRaisesRegex(ValueError, name):
+                    load_runtime_config({name: value})
+
     def test_os_environment_and_explicit_mapping(self):
         with patch.dict("os.environ", {"LLM_MODEL": "from-os"}, clear=True):
             self.assertEqual(load_runtime_config().llm_model, "from-os")

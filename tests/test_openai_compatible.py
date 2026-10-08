@@ -176,7 +176,9 @@ class TransportTests(unittest.TestCase):
             self.sleep.reset_mock()
             self.session.post.side_effect = [first, response()]
             with self.subTest(first=type(first).__name__):
-                self.assertEqual(provider.complete(REQUEST).content, "OK")
+                result = provider.complete(REQUEST)
+                self.assertEqual(result.content, "OK")
+                self.assertEqual(result.attempts, 2)
                 self.assertEqual(self.session.post.call_count, 2)
                 self.sleep.assert_called_once()
 

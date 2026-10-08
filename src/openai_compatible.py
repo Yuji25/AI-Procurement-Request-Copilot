@@ -168,7 +168,7 @@ class OpenAICompatibleProvider:
                     if type(count) is not int or count < 0:
                         raise ValueError("Invalid usage count")
                     usage[name] = count
-            return ModelResponse(content, tuple(calls), finish, usage)
+            return ModelResponse(content, tuple(calls), finish, usage, attempts=attempt)
         except (ValueError, TypeError, KeyError):
             raise ProviderResponseError("Malformed provider response.", attempts=attempt) from None
 

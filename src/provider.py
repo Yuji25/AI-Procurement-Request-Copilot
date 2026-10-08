@@ -44,6 +44,7 @@ class ModelResponse:
     tool_calls: tuple[ToolCall, ...] = ()
     finish_reason: str | None = None
     usage: dict[str, int] = field(default_factory=dict)
+    attempts: int = 1
 
 
 class LLMProvider(Protocol):
