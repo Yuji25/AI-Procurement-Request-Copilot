@@ -1,7 +1,14 @@
 .venv/
+venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .env
+.env.*
+!.env.example
 .DS_Store
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 evals/results_*.csv

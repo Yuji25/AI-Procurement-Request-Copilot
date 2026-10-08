@@ -9,6 +9,10 @@ class RunTelemetryCounter:
     llm_calls: int = 0
     tool_calls: int = 0
     tool_names: list[str] = field(default_factory=list)
+    logical_llm_calls: int = 0
+    prompt_tokens: int | None = 0
+    completion_tokens: int | None = 0
+    cached_tokens: int | None = 0
 
     def record_llm_call(self) -> None:
         self.llm_calls += 1
